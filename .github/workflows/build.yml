@@ -17,16 +17,17 @@ jobs:
       with:
         python-version: '3.11'
 
-- name: Install Dependencies
+    - name: Install Dependencies
       run: |
         python -m pip install --upgrade pip
-        # We add numpy explicitly here so PyInstaller doesn't crash
         pip install pyinstaller pandas numpy openpyxl
 
     - name: Package with PyInstaller as Universal2
       env:
         MACOSX_DEPLOYMENT_TARGET: "11.0"
       run: |
+        # Make sure your file is actually named main.py! 
+        # If it's named something else, change main.py below to your filename.
         pyinstaller --onefile --target-arch universal2 main.py
 
     - name: Upload Executable
