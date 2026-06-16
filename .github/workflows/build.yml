@@ -54,16 +54,16 @@ jobs:
     - uses: actions/download-artifact@v4
       with:
         name: build-windows
-        path: release/
+        path: "release/grade conv for windows/"
     - uses: actions/download-artifact@v4
       with:
         name: build-mac
-        path: release/
-    - name: Fix Mac executable permissions
-      run: chmod +x release/grade-conv
-    - name: Zip all platforms
-      run: zip -j grade-conv.zip release/grade-conv.exe release/grade-conv README.md
+        path: "release/grade conv for mac/"
+    - name: Fix Mac permissions and copy readme
+      run: |
+        chmod +x "release/grade conv for mac/grade-conv"
+        cp README.md release/
     - uses: actions/upload-artifact@v4
       with:
         name: grade-conv
-        path: grade-conv.zip
+        path: release/
