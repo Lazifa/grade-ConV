@@ -17,10 +17,11 @@ jobs:
       with:
         python-version: '3.11'
 
-    - name: Install Dependencies
+- name: Install Dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install pyinstaller pandas openpyxl  # Added pandas here!
+        # We add numpy explicitly here so PyInstaller doesn't crash
+        pip install pyinstaller pandas numpy openpyxl
 
     - name: Package with PyInstaller as Universal2
       env:
