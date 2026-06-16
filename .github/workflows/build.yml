@@ -1,4 +1,4 @@
-name: Build Universal Mac Executable (Backwards Compatible)
+name: Build Mac Intel Executable (Backwards Compatible)
 
 on:
   push:
@@ -6,7 +6,7 @@ on:
 
 jobs:
   build-macos:
-    runs-on: macos-14
+    runs-on: macos-13  # Uses an Intel-based Mac runner natively
 
     steps:
     - name: Checkout code
@@ -16,22 +16,22 @@ jobs:
       uses: actions/setup-python@v5
       with:
         python-version: '3.11'
+        architecture: 'x64'  # Forces standard 64-bit Intel Python
 
     - name: Install Dependencies
       run: |
         python -m pip install --upgrade pip
         pip install pyinstaller pandas numpy openpyxl
 
-    - name: Package with PyInstaller as Universal2
+    - name: Package with PyInstaller for Intel
       env:
         MACOSX_DEPLOYMENT_TARGET: "11.0"
       run: |
-        # Make sure your file is actually named main.py! 
-        # If it's named something else, change main.py below to your filename.
-        pyinstaller --onefile --target-arch universal2 main.py
+        # Changed target-arch to x86_64 to match your Intel Mac perfectly!
+        pyinstaller --onefile --target-arch x86_64 main.py
 
     - name: Upload Executable
       uses: actions/upload-artifact@v4
       with:
-        name: mac-universal-executable
+        name: mac-intel-executable
         path: dist/
