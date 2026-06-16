@@ -1,84 +1,96 @@
-import pandas as pd
+import csv
 import os
-import sys
+from openpyxl import Workbook
 
-#get file path from user
 def clean_path(p):
     return p.strip().strip("&").strip().strip("'").strip('"').replace("\\ ", " ").strip()
+
+def read_csv(path):
+    with open(path, newline='', encoding='utf-8-sig') as f:
+        reader = csv.DictReader(f)
+        return [row for row in reader], reader.fieldnames or []
+
+def to_float(val):
+    try:
+        return float(val)
+    except (TypeError, ValueError):
+        return None
 
 while True:
     path_a = clean_path(input("drop main file here: "))
     path_b = clean_path(input("drop second file here: "))
 
     try:
-        dfa = pd.read_csv(path_a)
-        dfb = pd.read_csv(path_b)
+        rows_a, cols_a = read_csv(path_a)
+        rows_b, cols_b = read_csv(path_b)
     except Exception as e:
         print(f"error reading files: {e}")
         continue
 
-    if 'SrcCr' not in dfa.columns and 'SrcCr' not in dfb.columns:
+    has_src_a = 'SrcCr' in cols_a
+    has_src_b = 'SrcCr' in cols_b
+    has_cr_a  = 'Cr' in cols_a
+    has_cr_b  = 'Cr' in cols_b
+
+    if not has_src_a and not has_src_b:
         print("error: neither file looks like the main transfer file")
-    elif 'Cr' not in dfa.columns and 'Cr' not in dfb.columns:
+    elif not has_cr_a and not has_cr_b:
         print("error: neither file looks like the second transfer file")
-    elif 'SrcCr' in dfa.columns and 'SrcCr' in dfb.columns:
+    elif has_src_a and has_src_b:
         print("error: both files have SrcCr — drop different files")
-    elif 'Cr' in dfa.columns and 'Cr' in dfb.columns:
+    elif has_cr_a and has_cr_b:
         print("error: both files have Cr — drop different files")
     else:
         break
-    
-    
 
-
-if 'SrcCr' in dfa.columns:
-    df1, df2 = dfa, dfb
+if has_src_a:
+    rows1, cols1 = rows_a, cols_a
+    rows2, cols2 = rows_b, cols_b
     main_path = path_a
 else:
-    df1, df2 = dfb, dfa
+    rows1, cols1 = rows_b, cols_b
+    rows2, cols2 = rows_a, cols_a
     main_path = path_b
 
+# calc from main (transferred) file — skip rows where SrcCr is not numeric
+valid = [r for r in rows1 if to_float(r.get('SrcCr')) is not None]
 
+sub_total_initial_credit_1 = sum(to_float(r.get('SrcCr')) or 0 for r in rows1)
+total_final_credit          = sum(to_float(r.get('TgtCr')) or 0 for r in valid)
+initial_pre_GPA_1           = sum((to_float(r.get('Gr')) or 0) * (to_float(r.get('SrcCr')) or 0) for r in valid)
+final_GPA                   = sum((to_float(r.get('Gr')) or 0) * (to_float(r.get('TgtCr')) or 0) for r in valid) / total_final_credit if total_final_credit else 0
 
-#read the csv file and calculate the total initial credit, total final credit, initial GPA, and final GPA
-pd.set_option('display.max_rows', None)
-#print(df1)
-valid = df1[pd.to_numeric(df1['SrcCr'], errors='coerce').notna()]
-sub_total_initila_cradit_1 = pd.to_numeric(df1['SrcCr'], errors='coerce').sum()
-total_final_credit = pd.to_numeric(valid['TgtCr'], errors='coerce').sum()
-initial_Pre_GPA_1= (pd.to_numeric(valid['Gr'], errors='coerce') * pd.to_numeric(valid['SrcCr'], errors='coerce')).sum()
-final_GPA = (pd.to_numeric(valid['Gr'], errors='coerce') * pd.to_numeric(valid['TgtCr'], errors='coerce')).sum() / total_final_credit
+# calc from second (non-transferred) file
+sub_total_initial_credit_2 = sum(to_float(r.get('Cr')) or 0 for r in rows2)
+initial_pre_GPA_2           = sum((to_float(r.get('Gr')) or 0) * (to_float(r.get('Cr')) or 0) for r in rows2)
 
-#read the second csv file and calculate the total initial credit and initial GPA
-#print(df2)
-sub_total_initila_cradit_2 = pd.to_numeric(df2['Cr'], errors='coerce').sum()
-initial_Pre_GPA_2= (pd.to_numeric(df2['Gr'], errors='coerce') * pd.to_numeric(df2['Cr'], errors='coerce')).sum()
+# totals
+total_initial_credit = sub_total_initial_credit_1 + sub_total_initial_credit_2
+initial_GPA          = (initial_pre_GPA_1 + initial_pre_GPA_2) / total_initial_credit if total_initial_credit else 0
 
-#calculate the total initial credit and initial GPA
-total_initial_credit = sub_total_initila_cradit_1 + sub_total_initila_cradit_2
-initial_GPA = (initial_Pre_GPA_1 + initial_Pre_GPA_2) / total_initial_credit
+# write xlsx
+wb = Workbook()
 
-#print the results for debugging
-'''
-print(f"total initial credit: {total_initial_credit}")
-print(f"total final credit: {total_final_credit}")
-print(f"final GPA: {final_GPA}")
-print(f"initial GPA: {initial_GPA}")
-'''
+def write_sheet(wb, title, rows, cols, first=False):
+    ws = wb.active if first else wb.create_sheet()
+    ws.title = title
+    ws.append(list(cols))
+    for row in rows:
+        ws.append([row.get(c, '') for c in cols])
 
-#new dataframe
-df3 = pd.DataFrame({
-    'Label': ['Initial GPA', 'Final GPA', 'Initial Credits', 'Final Credits'],
-    'Value': [initial_GPA, final_GPA, total_initial_credit, total_final_credit]
-})
+write_sheet(wb, 'Transferred',     rows1, cols1, first=True)
+write_sheet(wb, 'Non-Transferred', rows2, cols2)
 
-# export
-base_name = os.path.splitext(os.path.basename(main_path))[0]
+ws3 = wb.create_sheet('Summary')
+ws3.append(['Label', 'Value'])
+ws3.append(['Initial GPA',     initial_GPA])
+ws3.append(['Final GPA',       final_GPA])
+ws3.append(['Initial Credits', total_initial_credit])
+ws3.append(['Final Credits',   total_final_credit])
+
+base_name   = os.path.splitext(os.path.basename(main_path))[0]
 output_path = os.path.join(os.path.dirname(main_path), f'{base_name} - output.xlsx')
-with pd.ExcelWriter(output_path) as writer:
-    df1.to_excel(writer, sheet_name='Transferred', index=False)
-    df2.to_excel(writer, sheet_name='Non-Transferred', index=False)
-    df3.to_excel(writer, sheet_name='Summary', index=False)
+wb.save(output_path)
 
 print(f"saved to: {output_path}")
 input("press enter to close...")
