@@ -18,11 +18,13 @@ jobs:
         python -m pip install --upgrade pip
         pip install pyinstaller openpyxl
     - name: Package with PyInstaller
-      run: pyinstaller --onefile -n grade-conv main.py
+      run: pyinstaller --onedir -n grade-conv main.py
+    - name: Compress Windows Output
+      run: Compress-Archive -Path dist/grade-conv/* -DestinationPath dist/grade-conv-windows.zip
     - uses: actions/upload-artifact@v4
       with:
         name: build-windows
-        path: dist/grade-conv.exe
+        path: dist/grade-conv-windows.zip
 
 
   build-mac:
@@ -39,11 +41,13 @@ jobs:
     - name: Package with PyInstaller
       env:
         MACOSX_DEPLOYMENT_TARGET: "11.0"
-      run: pyinstaller --onefile --target-arch universal2 -n grade-conv main.py
+      run: pyinstaller --onedir --target-arch universal2 -n grade-conv main.py
+    - name: Compress Mac Output
+      run: cd dist/grade-conv && zip -r ../grade-conv-mac.zip .
     - uses: actions/upload-artifact@v4
       with:
         name: build-mac
-        path: dist/grade-conv
+        path: dist/grade-conv-mac.zip
 
 
   package:
@@ -54,14 +58,17 @@ jobs:
     - uses: actions/download-artifact@v4
       with:
         name: build-windows
-        path: "release/grade conv for windows/"
+        path: tmp/
     - uses: actions/download-artifact@v4
       with:
         name: build-mac
-        path: "release/grade conv for mac/"
-    - name: Fix Mac permissions and copy readme
+        path: tmp/
+    - name: Extract and organize
       run: |
-        chmod +x "release/grade conv for mac/grade-conv"
+        mkdir -p "release/for Microsoft Windows"
+        mkdir -p "release/for Apple Macintosh"
+        unzip tmp/grade-conv-windows.zip -d "release/for Microsoft Windows/"
+        unzip tmp/grade-conv-mac.zip -d "release/for Apple Macintosh/"
         cp README.md release/
     - uses: actions/upload-artifact@v4
       with:
